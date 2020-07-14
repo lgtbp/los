@@ -1,12 +1,16 @@
-
+#include"stdio.h"
+// void  tests(int a)
+// {
+  
+// }
 int test(int a, int b, int ff)
 {
     int c = 1;
     c = ff + b;
     c++;
+   // tests(2);
     return a + c;
 }
-extern void functions(int, int, int);
 int main(void)
 {
     unsigned int a = 4, b = 3;

@@ -6,11 +6,10 @@
 #include <stdint.h>
 #include <stdio.h>
 UG_GUI gc;
-
 extern void functions(int, int, int, int);
 void drae_point(UG_S16 x, UG_S16 y, UG_COLOR c)
 {
-    los_draw_point(x, y, c);
+    los_draw_point(x, y, c);  
 }
 
 #define MAX_OBJ_NUM 3
@@ -87,7 +86,7 @@ void los_irq(int num)
         UG_TouchUpdate(x, y, TOUCH_STATE_PRESSED); //触摸坐标更新
     }
 }
- 
+
 int main(void)
 {
     int a = 4;
@@ -115,7 +114,7 @@ int main(void)
     UG_ButtonSetText(&window_1, BTN_ID_0, "About\nGUI");
     /* Configure Button 2 */
     UG_ButtonSetFont(&window_1, BTN_ID_1, &FONT_12X20);
-    UG_ButtonSetBackColor(&window_1, BTN_ID_1, C_RED);
+    UG_ButtonSetBackColor(&window_1, BTN_ID_1, 0xFF);
     UG_ButtonSetText(&window_1, BTN_ID_1, "btn");
 
     /* -------------------------------------------------------------------------------- */
@@ -132,6 +131,7 @@ int main(void)
     UG_ButtonSetText(&window_2, BTN_ID_0, "OK");
 
     UG_WindowShow(&window_1);
+    printf("test ugui\n");
     while (1)
     {
         UG_Update(); //Windows refesh

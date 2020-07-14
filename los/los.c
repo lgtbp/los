@@ -4,18 +4,14 @@
  /
  / Copyright (c) 2014-2017 LP电子,All Rights Reserved.Author's mailbox:lgtbp@126.com.
  /
- / 未经授权，禁止商用。Commercial use is prohibited without authorization.
+ / GNU LESSER GENERAL PUBLIC LICENSE  Version 2.1
  /----------------------------------------------------------------------------*/
 #include "los.h"
-static fun_os func;
-typedef void (*los_cmd)(void);
+static fun_os *func;
 static uint8_t arg;
 static uint8_t *gram;
 static los_t *lp;
-#define HEAP_REG 0
-int num = 0;
-#define CREGLEN 4 * 7
-#define AREGLEN 4 * REG_NUM
+#define LOS_DEBUG 1
 struct heap
 {
 	uint8_t los[4];
@@ -24,51 +20,59 @@ struct heap
 	uint32_t stack_len;
 	uint32_t heap_len;
 	uint32_t txt_len;
-	uint32_t global_len;	
+	uint32_t global_len;
 	uint32_t gvar_init_len;
 	uint32_t code_len;
 	uint32_t code_main;
 };
-int los_run(void);
 static void cmd_0(void)
 {
-	printf("over\n");
 	longjmp(lp->jbuf, 1);
 }
 static void cmd_1(void)
 {
-	if (arg == 8)
-	{
-		cmd_0();
-	}
-	else
-	{
-		lp->stack_end -= CREGLEN;
-		memcpy(lp->reg, &lp->ram[lp->stack_end], CREGLEN);
-		lp->stack_end -= 8;
-		lp->pc = (uint8_t *)*(uint64_t *)&lp->ram[lp->stack_end];
-	}
+	lp->stack_end -= CREGLEN;
+	memcpy(lp->reg, &gram[lp->stack_end], CREGLEN);
+	lp->stack_end -= 8;
+	lp->pc = (uint8_t *)(*(uint64_t *)&gram[lp->stack_end]);
 }
 static void cmd_2(void)
 {
 	lp->reg[HEAP_REG].u32 -= arg;
+#ifdef LOS_DEBUG
+	if (lp->stack_end > lp->reg[HEAP_REG].u32)
+	{
+		printf("2no stack\n");
+		cmd_0();
+	}
+#endif
 }
 static void cmd_3(void)
 {
 	lp->reg[HEAP_REG].u32 += arg;
+	cmd_1();
 }
 static void cmd_4(void)
 {
 	lp->reg[HEAP_REG].u32 -= arg + (*(uint16_t *)lp->pc << 8);
 	lp->pc += 2;
+#ifdef LOS_DEBUG
+	if (lp->stack_end > lp->reg[HEAP_REG].u32)
+	{
+		printf("4 no stack\n");
+		cmd_0();
+	}
+#endif
 }
 static void cmd_5(void)
 {
 	lp->reg[HEAP_REG].u32 += arg + (*(uint16_t *)lp->pc << 8);
 	lp->pc += 2;
+	cmd_1();
 }
 static void cmd_6(void)
 {
+	cmd_0();
 	lp->reg[arg & 0xf].u32 = arg >> 4;
 }
 static void cmd_7(void)
@@ -98,12 +102,12 @@ static void cmd_11(void)
 }
 static void cmd_12(void)
 {
-	lp->reg[arg >> 3].u32 = *(uint32_t *)&gram[lp->reg[arg & 0x7].u32 + *(uint16_t *)lp->pc];
+	lp->reg[arg >> 3].u32 = *(uint32_t *)&gram[lp->reg[arg & 0x7].s32 + *(uint16_t *)lp->pc];
 	lp->pc += 2;
 }
 static void cmd_13(void)
 {
-	lp->reg[arg >> 3].u32 = gram[lp->reg[arg & 0x7].u32 + *(uint16_t *)lp->pc];
+	lp->reg[arg >> 3].u32 = *(uint8_t *)&gram[lp->reg[arg & 0x7].s32 + *(uint16_t *)lp->pc];
 	lp->pc += 2;
 }
 static void cmd_14(void)
@@ -127,37 +131,50 @@ static void cmd_17(void)
 }
 static void cmd_18(void)
 {
-	lp->reg[arg].u32 = *(uint16_t *)lp->pc + lp->data_len;
+	lp->reg[arg & 0xf].u32 = (arg >> 4) + (*(uint16_t *)lp->pc << 4);
 	lp->pc += 2;
 }
 static void cmd_19(void)
 {
-	lp->reg[arg].u32 = *(uint16_t *)lp->pc + lp->bss_len;
+	lp->reg[arg & 0xf].u32 = 0xfffff + (arg >> 4) + (*(uint16_t *)lp->pc << 4);
 	lp->pc += 2;
 }
 static void cmd_20(void)
 {
-	lp->reg[arg].u32 = *(uint16_t *)lp->pc;
-	lp->pc += 2;
+	cmd_0();
 }
 
 static void cmd_21(void)
 {
 	uint32_t call_addr = arg + (*(uint16_t *)lp->pc << 8);
 	lp->pc += 2;
-	*(uint64_t *)&lp->ram[lp->stack_end] = (uint64_t)&lp->pc[0];
+	*(uint64_t *)&gram[lp->stack_end] = (uint64_t)(&lp->pc[0]);
 	lp->stack_end += 8;
 	lp->pc = &lp->code[call_addr];
-	memcpy(&lp->ram[lp->stack_end], lp->reg, CREGLEN);
+	memcpy(&gram[lp->stack_end], lp->reg, CREGLEN);
 	lp->stack_end += CREGLEN;
+#ifdef LOS_DEBUG
+	if (lp->stack_end > lp->reg[HEAP_REG].u32)
+	{
+		printf("no stack\n");
+		cmd_0();
+	}
+#endif
 }
 static void cmd_22(void)
 {
-	*(uint64_t *)&lp->ram[lp->stack_end] = (uint64_t)lp->pc;
+	*(uint64_t *)&gram[lp->stack_end] = (uint64_t)lp->pc;
 	lp->stack_end += 8;
 	lp->pc = &lp->code[lp->reg[arg].u32];
-	memcpy(&lp->ram[lp->stack_end], lp->reg, CREGLEN);
+	memcpy(&gram[lp->stack_end], lp->reg, CREGLEN);
 	lp->stack_end += CREGLEN;
+#ifdef LOS_DEBUG
+	if (lp->stack_end > lp->reg[HEAP_REG].u32)
+	{
+		printf("no stack\n");
+		cmd_0();
+	}
+#endif
 }
 static void cmd_23(void)
 {
@@ -184,6 +201,8 @@ static void cmd_27(void)
 }
 static void cmd_28(void)
 {
+	printf("28\n");
+	cmd_0();
 	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 - ((*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16)));
 	lp->pc += 4;
 }
@@ -226,6 +245,8 @@ static void cmd_36(void)
 }
 static void cmd_37(void)
 {
+	printf("37\n");
+	cmd_0();
 	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 << (*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
 	lp->pc += 4;
 }
@@ -240,30 +261,50 @@ static void cmd_39(void)
 }
 static void cmd_40(void)
 {
+	printf("40\n");
+	cmd_0();
 	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> (*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
 	lp->pc += 4;
 }
 static void cmd_41(void)
 {
-
-	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> lp->reg[arg >> 4].u32;
+	uint32_t mov = lp->reg[arg >> 4].u32;
+	if (lp->reg[arg & 0xf].u32 & 0x80000000)
+	{
+		lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> mov;
+		if (mov > 31)
+		{
+			lp->reg[arg >> 4].u32 = 0x80000000;
+		}
+		else
+			lp->reg[arg >> 4].u32 |= (0xffffffff << (32 - mov));
+	}
+	else
+		lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> lp->reg[arg >> 4].u32;
 }
 static void cmd_42(void)
 {
 	uint16_t mov = (*(uint16_t *)lp->pc);
-	if (lp->reg[arg >> 4].u32 & 0x80000000)
+	if (lp->reg[arg & 0xf].u32 & 0x80000000)
 	{
 		lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> mov;
 		lp->reg[arg >> 4].u32 |= (0xffffffff << (32 - mov));
+#ifdef LOS_DEBUG
+		if (mov > 31)
+		{
+			printf("42\n");
+			cmd_0();
+		}
+#endif
 	}
 	else
-	{
 		lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> mov;
-	}
 	lp->pc += 2;
 }
 static void cmd_43(void)
 {
+	printf("43\n");
+	cmd_0();
 	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 >> (*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
 	lp->pc += 4;
 }
@@ -298,30 +339,39 @@ static void cmd_49(void)
 }
 static void cmd_50(void)
 {
-	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].s32 / lp->reg[arg >> 4].s32;
-}
-static void cmd_51(void)
-{
-	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].u32 / (*(int16_t *)lp->pc);
-	lp->pc += 2;
-}
-static void cmd_52(void)
-{
-	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].s32 / (*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
-	lp->pc += 4;
-}
-static void cmd_53(void)
-{
 	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 / lp->reg[arg >> 4].u32;
 }
-static void cmd_54(void)
+static void cmd_51(void)
 {
 	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 / (*(uint16_t *)lp->pc);
 	lp->pc += 2;
 }
+static void cmd_52(void)
+{
+	lp->reg[arg >> 4].u32 = lp->reg[arg & 0xf].u32 / (*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
+	lp->pc += 4;
+}
+static void cmd_53(void)
+{
+#ifdef LOS_DEBUG
+	if (0 == lp->reg[arg >> 4].s32)
+	{
+		printf("53\n");
+		cmd_0();
+	}
+#endif
+	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].s32 / lp->reg[arg >> 4].s32;
+}
+static void cmd_54(void)
+{
+	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].s32 / (*(uint16_t *)lp->pc);
+	lp->pc += 2;
+}
 static void cmd_55(void)
 {
-	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].s32 / (*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
+	printf("55\n");
+	cmd_0();
+	lp->reg[arg >> 4].s32 = lp->reg[arg & 0xf].s32 / (int32_t)(*(uint16_t *)lp->pc + (*(uint16_t *)(lp->pc + 2) << 16));
 	lp->pc += 4;
 }
 static void cmd_56(void)
@@ -366,7 +416,7 @@ static void cmd_64(void)
 }
 static void cmd_65(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
 	if (lp->reg[arg & 0xf].s32 == lp->reg[arg >> 4].s32)
 		lp->pc += imm;
@@ -381,7 +431,7 @@ static void cmd_66(void)
 }
 static void cmd_67(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
 	if (lp->reg[arg & 0xf].s32 != lp->reg[arg >> 4].s32)
 		lp->pc += imm;
@@ -396,9 +446,9 @@ static void cmd_68(void)
 }
 static void cmd_69(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
-	if (lp->reg[arg >> 4].s32 > lp->reg[arg & 0xf].s32)
+	if (lp->reg[arg >> 4].u32 > lp->reg[arg & 0xf].u32)
 		lp->pc += imm;
 }
 static void cmd_70(void)
@@ -406,14 +456,14 @@ static void cmd_70(void)
 	int32_t cmp = *(int16_t *)(lp->pc);
 	int32_t imm = *(int16_t *)(&lp->pc[2]);
 	lp->pc += 4;
-	if (lp->reg[arg].s32 > cmp)
+	if (lp->reg[arg].u32 > cmp)
 		lp->pc += imm;
 }
 static void cmd_71(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
-	if (lp->reg[arg >> 4].s32 >= lp->reg[arg & 0xf].s32)
+	if (lp->reg[arg >> 4].u32 >= lp->reg[arg & 0xf].u32)
 		lp->pc += imm;
 }
 static void cmd_72(void)
@@ -421,12 +471,12 @@ static void cmd_72(void)
 	int32_t cmp = *(int16_t *)(lp->pc);
 	int32_t imm = *(int16_t *)(&lp->pc[2]);
 	lp->pc += 4;
-	if (lp->reg[arg].s32 >= cmp)
+	if (lp->reg[arg].u32 >= cmp)
 		lp->pc += imm;
 }
 static void cmd_73(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
 	if (lp->reg[arg >> 4].s32 > lp->reg[arg & 0xf].s32)
 		lp->pc += imm;
@@ -441,7 +491,7 @@ static void cmd_74(void)
 }
 static void cmd_75(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
 	if (lp->reg[arg >> 4].s32 >= lp->reg[arg & 0xf].s32)
 		lp->pc += imm;
@@ -456,44 +506,44 @@ static void cmd_76(void)
 }
 static void cmd_77(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
-	if (lp->reg[arg >> 4].s32 < lp->reg[arg & 0xf].s32)
+	if (lp->reg[arg >> 4].u32 < lp->reg[arg & 0xf].u32)
 		lp->pc += imm;
 }
 static void cmd_78(void)
 {
 	int32_t cmp = *(int16_t *)(lp->pc);
-	uint32_t imm = *(int16_t *)(&lp->pc[2]);
+	int32_t imm = *(int16_t *)(&lp->pc[2]);
 	lp->pc += 4;
-	if (lp->reg[arg].s32 < cmp)
+	if (lp->reg[arg].u32 < cmp)
 		lp->pc += imm;
 }
 static void cmd_79(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
-	if (lp->reg[arg >> 4].s32 <= lp->reg[arg & 0xf].s32)
+	if (lp->reg[arg >> 4].u32 <= lp->reg[arg & 0xf].u32)
 		lp->pc += imm;
 }
 static void cmd_80(void)
 {
 	int32_t cmp = *(int16_t *)(lp->pc);
-	uint32_t imm = *(int16_t *)(&lp->pc[2]);
+	int32_t imm = *(int16_t *)(&lp->pc[2]);
 	lp->pc += 4;
-	if (lp->reg[arg].s32 <= cmp)
+	if (lp->reg[arg].u32 <= cmp)
 		lp->pc += imm;
 }
 static void cmd_81(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
 	if (lp->reg[arg >> 4].s32 < lp->reg[arg & 0xf].s32)
 		lp->pc += imm;
 }
 static void cmd_82(void)
 {
-	uint32_t cmp = *(uint16_t *)(lp->pc);
+	int32_t cmp = *(int16_t *)(lp->pc);
 	int32_t imm = *(int16_t *)(&lp->pc[2]);
 	lp->pc += 4;
 	if (lp->reg[arg].s32 < cmp)
@@ -501,7 +551,7 @@ static void cmd_82(void)
 }
 static void cmd_83(void)
 {
-	uint32_t imm = *(uint16_t *)(lp->pc);
+	int32_t imm = *(int16_t *)(lp->pc);
 	lp->pc += 2;
 	if (lp->reg[arg >> 4].s32 <= lp->reg[arg & 0xf].s32)
 		lp->pc += imm;
@@ -530,10 +580,10 @@ static void cmd_87(void)
 }
 static void cmd_88(void)
 {
-	int len = *(uint16_t *)lp->pc;
+	int len = ((*(uint16_t *)lp->pc) << 8) + arg;
 	lp->pc += 2;
-	if (func)
-		func(arg + len);
+	if (func[len])
+		func[len]();
 }
 static void cmd_89(void)
 {
@@ -635,15 +685,17 @@ const los_cmd los_cmd_api[] = {
 int los_irq(int num)
 {
 	int res;
+	if (0 == lp->los_irq)
+		return 0;
 	lp->arg = arg;
-	memcpy(&lp->ram[lp->stack_end], &lp->arg, sizeof(los_irq_len_t));
+	memcpy(&gram[lp->stack_end], &lp->arg, sizeof(los_irq_len_t));
 	lp->stack_end += sizeof(los_irq_len_t);
 	lp->pc = lp->code;
 	res = setjmp(lp->jbuf);
-	if (res) 
+	if (res)
 	{
 		lp->stack_end -= sizeof(los_irq_len_t);
-		memcpy(&lp->arg, &lp->ram[lp->stack_end], sizeof(los_irq_len_t));
+		memcpy(&lp->arg, &gram[lp->stack_end], sizeof(los_irq_len_t));
 		arg = lp->arg;
 		return 0;
 	}
@@ -651,7 +703,7 @@ int los_irq(int num)
 	res = los_run();
 	return res;
 }
-void los_set_function(fun_os f)
+void los_set_function(fun_os *f)
 {
 	func = f;
 }
@@ -661,22 +713,22 @@ void los_set_return(uint32_t data)
 }
 uint8_t *los_get_arg(uint32_t num)
 {
-	return &lp->reg[8 + num].u32;
+	return (uint8_t *)(&lp->reg[8 + num].u32);
 }
 uint8_t *los_get_argp(uint32_t num)
 {
-	return &lp->ram[lp->reg[8 + num].u32];
+	return (uint8_t *)(&gram[lp->reg[8 + num].u32]);
 }
 uint8_t *los_get_datap(void)
 {
-	return lp->ram;
+	return gram;
 }
 static uint8_t los_init_code(los_t *lp, uint32_t *data, uint8_t inter)
 {
 	uint32_t temp;
 	struct heap *los_heap;
 	los_heap = (struct heap *)data;
-	los_heap->stack_len = 2048;
+	los_heap->stack_len = 1024 * 12;
 	printf("size %d\r\n", sizeof(struct heap));
 	printf("version=%x\r\n", los_heap->version);
 	printf("pad_len=%d\r\n", los_heap->pad_len);
@@ -688,19 +740,19 @@ static uint8_t los_init_code(los_t *lp, uint32_t *data, uint8_t inter)
 	printf("code_len=%d\r\n", los_heap->code_len);
 	lp->los_irq = (los_heap->code_main & 0x80000000) > 0 ? 1 : 0;
 	los_heap->code_main &= 0x7fffffff;
-	printf("code_main=%d\r\n\n", los_heap->code_main);
 	if (0 != strcmp((char *)los_heap->los, "Los"))
 		return 0xff;
 	if (los_api_vs < los_heap->version)
 		return 0xfe;
 
+	lp->code_len = los_heap->code_len;
 	lp->data_len = los_heap->txt_len;
 	lp->bss_len = los_heap->txt_len + los_heap->gvar_init_len;
 
-	lp->lvar_start = los_heap->txt_len + los_heap->gvar_init_len + los_heap->global_len; 
-	lp->stack_end = lp->lvar_start;														 
-	temp = lp->lvar_start + los_heap->stack_len;										
-	temp = temp + los_heap->heap_len;													
+	lp->lvar_start = los_heap->txt_len + los_heap->gvar_init_len + los_heap->global_len;
+	lp->stack_end = lp->lvar_start;
+	temp = lp->lvar_start + los_heap->stack_len;
+	temp = temp + los_heap->heap_len;
 	lp->reg[HEAP_REG].u32 = temp;
 	if (inter)
 	{
@@ -727,6 +779,10 @@ static uint8_t los_init_code(los_t *lp, uint32_t *data, uint8_t inter)
 		lpram_free(data);
 	}
 	gram = &lp->ram[0];
+	gram -= los_heap->code_len;
+	lp->reg[HEAP_REG].u32 += los_heap->code_len;
+	lp->lvar_start += los_heap->code_len;
+	lp->stack_end += los_heap->code_len;
 	lp->reg[REG_RETURN].u32 = 0;
 	return 0;
 }
@@ -737,11 +793,13 @@ int los_run(void)
 	{
 		arg = *(lp->pc + 1);
 		res = *lp->pc;
-		if (res > 89)
+#ifdef LOS_DEBUG
+		if (res > ARRLEN(los_cmd_api))
 		{
 			printf("err op[%d]\r\n", res);
 			return 4;
 		}
+#endif
 		lp->pc += 2;
 		los_cmd_api[res]();
 	}
@@ -749,7 +807,6 @@ int los_run(void)
 }
 uint32_t los_app_first(uint32_t *addr, uint8_t inter)
 {
-	uint8_t tbuf[6];
 	int res;
 	if (addr == 0)
 		return 1;

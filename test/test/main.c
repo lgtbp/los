@@ -7,8 +7,8 @@
  / 未经授权，禁止商用。Commercial use is prohibited without authorization.
  /----------------------------------------------------------------------------*/
 #include "../los/los.h"
-#include<windows.h>
-
+#include <windows.h>
+#include "stdio.h"
 //buf_path当前路径
 //len代码空间
 uint8_t *read_file_bin(char *buf_path, uint32_t *len)
@@ -29,16 +29,16 @@ uint8_t *read_file_bin(char *buf_path, uint32_t *len)
 	fclose(pF);
 	return buf;
 }
-void los_function(int num)
+void los_printf(void)
 {
 	uint8_t buf[256];
-	if (num == 1) //printf
-	{
-		los_sprintf_low(buf, los_get_argp(0), 1);
-		printf("%s", buf);
-		return;
-	}
+	los_sprintf_low(buf, los_get_argp(0), 1);
+	printf("%s", buf);
 }
+fun_os fapi[] =
+{
+		los_printf,
+};
 int main(int argc, char **argv)
 {
 	int res;
@@ -46,12 +46,12 @@ int main(int argc, char **argv)
 	uint8_t *los;
 	char path[128];
 
-	GetCurrentDirectory(100, path); 
-	len=strlen(path);
-	strcpy(&path[len],"\\test.bin");
+	GetCurrentDirectory(100, path);
+	len = strlen(path);
+	strcpy(&path[len], "\\test.bin");
 
 	los = read_file_bin(path, &len);
-	los_set_function(los_function);
+	los_set_function(fapi);
 	res = los_app_first((uint32_t *)los, 0);
 	printf("res:%d\n", res);
 	return 0;
