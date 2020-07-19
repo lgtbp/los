@@ -725,7 +725,7 @@ uint8_t *los_get_datap(void)
 }
 static uint8_t los_init_code(los_t *lp, uint32_t *data, uint8_t inter)
 {
-	uint32_t temp;
+	uint32_t temp = 0;
 	struct heap *los_heap;
 	los_heap = (struct heap *)data;
 	los_heap->stack_len = 1024 * 12;
@@ -760,30 +760,30 @@ static uint8_t los_init_code(los_t *lp, uint32_t *data, uint8_t inter)
 		if (0 == lp->ram)
 			return 3;
 		memset(lp->ram, 0, temp);
-		if (lp->lvar_start)
-			memcpy(lp->ram, &data[9], lp->lvar_start - los_heap->global_len);
-		lp->code = (uint8_t *)((uint8_t *)data + 36 + lp->lvar_start - los_heap->global_len);
+		memcpy(lp->ram, (uint8_t *)&data[9] + los_heap->code_len, los_heap->txt_len + los_heap->gvar_init_len);
+		lp->code = (uint8_t *)&data[9];
+		gram = lp->ram - los_heap->code_len;
 		lp->pc = lp->code + los_heap->code_main;
+
+		lp->reg[HEAP_REG].u32 += los_heap->code_len;
+		lp->stack_end += los_heap->code_len;
 	}
 	else
 	{
 		lp->ram = (uint8_t *)lpram_malloc(temp + los_heap->code_len);
 		if (0 == lp->ram)
 			return 3;
-		memset(lp->ram, 0, temp);
-		if (lp->lvar_start)
-			memcpy(lp->ram, &data[9], lp->lvar_start - los_heap->global_len);
-		memcpy(&lp->ram[temp], (void *)((uint8_t *)data + 36 + lp->lvar_start - los_heap->global_len), los_heap->code_len);
-		lp->code = lp->ram + temp;
+		memset(lp->ram, 0, temp + los_heap->code_len);
+		memcpy(lp->ram, &data[9], los_heap->txt_len + los_heap->gvar_init_len + los_heap->code_len);
+		lp->code = lp->ram;
+		gram = lp->ram;
 		lp->pc = lp->code + los_heap->code_main;
+
+		lp->reg[HEAP_REG].u32 += los_heap->code_len;
+		lp->stack_end += los_heap->code_len;
 		lpram_free(data);
 	}
-	gram = &lp->ram[0];
-	gram -= los_heap->code_len;
-	lp->reg[HEAP_REG].u32 += los_heap->code_len;
-	lp->lvar_start += los_heap->code_len;
-	lp->stack_end += los_heap->code_len;
-	lp->reg[REG_RETURN].u32 = 0;
+
 	return 0;
 }
 int los_run(void)
