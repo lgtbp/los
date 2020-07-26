@@ -92,6 +92,9 @@ Please modify the memory management API
 #ifndef MEM_CUSTOM
 #define lpram_malloc malloc
 #define lpram_free free
+#else
+extern void *lpram_malloc(uint32_t s);
+extern void lpram_free(void *p);
 #endif
 	/**
 los中断函数,有返回值

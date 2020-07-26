@@ -1,2 +1,2 @@
 
-PROVIDE ( printf = 167760000);
+PROVIDE ( printf = 0xfff00000);

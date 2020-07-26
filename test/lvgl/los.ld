@@ -1,3 +1,6 @@
+
+STACK_SIZE = 0x2000;
+
 PROVIDE ( printf = 0xfff00000);
 PROVIDE ( los_sleep = 0xfff00001);
 PROVIDE ( los_get_x = 0xfff00002);
