@@ -1,6 +1,13 @@
 # los
 #### c Language vm,c语言解释器
 
+# 工作原理
+* 1.通过clang把c语言编译成los汇编指令
+* 2.通过losld链接los的object文件
+* 3.通过llvm-obcopy转换成los执行文件
+* ![](./img/comp.png)
+# 上层api与下层api关系
+* ![](./img/run.png)
 ### 使用教程
 * 先把exe文件内win64.7z解压并把路径添加到环境系统变量
 * 进入sdl2/los文件中，执行make 生成losr.exe
