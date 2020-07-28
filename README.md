@@ -1,6 +1,10 @@
 # los
 #### c Language vm,c语言解释器
 
+## 只是体验一下-虚拟机运行littlevg-3个demo
+* [zip格式](https://github.com/lgtbp/los/releases/download/0.1.1/los.-.test.zip.zip)
+* [7z格式](https://github.com/lgtbp/los/releases/download/0.1.1/7z.7z)
+
 # 工作原理
 * 1.通过clang把c语言编译成los汇编指令
 * 2.通过losld链接los的object文件
