@@ -56,3 +56,4 @@ dkms.conf
 *.los
 *.s
 .vscode/*
+arch/*.ld
